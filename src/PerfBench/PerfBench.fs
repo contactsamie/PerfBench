@@ -46,7 +46,7 @@ let private funcWithLogging name func = async {
     result}
 
 let runTest namePrefix numUsers func =
-    [0..numUsers] 
+    [1..numUsers] 
         |> List.map (fun i ->         
             let name = namePrefix + (string i)
             let newFunc = fun() -> funcWithLogging name func
