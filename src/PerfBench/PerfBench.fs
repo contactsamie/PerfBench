@@ -29,21 +29,16 @@ let private config2 = @"";
 let private system = System.create "MySystem" <| Configuration.parse(config2)
 
 //
-type private Messages = Execute | Other
-type private CoordinatorMessages = Create | Other
+type private Messages = Execute
+type private CoordinatorMessages = Create | Finished of string*float | Stats
+type private TaskStatus = Executing | Succeeded of float | Failed of string
 
-let private handleMessage msg func =
-        match msg with
-            | Execute -> Async.Start (func())
-            | _ -> ()
-
-let private funcWithLogging name func = async {
+let private funcWithLogging name func parent = async {
     let timer = new System.Diagnostics.Stopwatch()
     timer.Start()
-    printfn "Started %s" name
-    let! result = func()
-    printfn "Elapsed Time: %f" timer.Elapsed.TotalSeconds
-    printfn "Finished %s" name
+    let! result = func()    
+    parent <! Finished (name,timer.Elapsed.TotalSeconds)
+    timer.Stop()
     result}
 
 let runTest namePrefix numUsers func =
@@ -51,20 +46,46 @@ let runTest namePrefix numUsers func =
         spawn system "Coordinator" <| fun mailbox ->
             let rec loop state =
                 actor {
-                    printfn "State: %O" state
                     let! msg = mailbox.Receive()                    
                     match msg with
-                            | Create -> return! loop ([1..numUsers] 
+                        | Create -> return! loop ([1..numUsers] 
                                                         |> List.map (fun i ->         
-                                                            let name = namePrefix + (string i)
-                                                            let newFunc = fun() -> funcWithLogging name func
-                                                            let ref = spawn system name (actorOf (fun msg -> handleMessage msg newFunc))
+                                                            let name = namePrefix + (string i)                                                                                                                        
+                                                            let newFunc = fun() -> funcWithLogging name func mailbox.Self
+                                                            let ref = spawn system name <| fun mailbox ->
+                                                                                            let rec loop state =
+                                                                                                actor { 
+                                                                                                    let! msg = mailbox.Receive()
+                                                                                                    match msg with
+                                                                                                        | Execute -> Async.Start (newFunc())                                                                                                    
+                                                                                                }
+                                                                                            loop []
                                                             do ref <! Execute                                                            
-                                                            ref))
-                            | _ -> return! loop state
+                                                            name,(ref,Executing)))
+                        | Finished (name, time) -> 
+                                                    let newState = (state
+                                                            |> List.map (fun elem ->
+                                                                match elem with
+                                                                    | n,(ref,Executing) when n = name -> 
+                                                                        printfn "Elapsed Time for %s is %f" name time
+                                                                        n,(ref,Succeeded time)
+                                                                    | n,(ref,status) -> n,(ref,status)
+                                                            ))
+                                                    let leftToProcess = newState |> List.filter (fun e -> 
+                                                                                                let n,(r,s) = e
+                                                                                                s = Executing)
+                                                                                 |> List.length
+                                                    do if (leftToProcess = 0) then mailbox.Self <! Stats
+                                                    return! loop newState
+                        | Stats -> 
+                                let average = state |> List.averageBy (fun e -> 
+                                                        match e with
+                                                            | n,(r,Succeeded s) -> s
+                                                            | _ -> 0.0                                                        
+                                                        )
+                                printf "Done with average time of %f" average
+                                return! loop state
                 }
             loop []
-    do coordinatorRef <! Create
-    ()
-
-
+    do coordinatorRef <! Create    
+    ()    
