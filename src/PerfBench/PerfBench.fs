@@ -30,6 +30,7 @@ let private system = System.create "MySystem" <| Configuration.parse(config2)
 
 //
 type private Messages = Execute | Other
+type private CoordinatorMessages = Create | Other
 
 let private handleMessage msg func =
         match msg with
@@ -46,10 +47,24 @@ let private funcWithLogging name func = async {
     result}
 
 let runTest namePrefix numUsers func =
-    [1..numUsers] 
-        |> List.map (fun i ->         
-            let name = namePrefix + (string i)
-            let newFunc = fun() -> funcWithLogging name func
-            let ref = spawn system name (actorOf (fun msg -> handleMessage msg newFunc)) <! Execute
-            ref)
+    let coordinatorRef =
+        spawn system "Coordinator" <| fun mailbox ->
+            let rec loop state =
+                actor {
+                    printfn "State: %O" state
+                    let! msg = mailbox.Receive()                    
+                    match msg with
+                            | Create -> return! loop ([1..numUsers] 
+                                                        |> List.map (fun i ->         
+                                                            let name = namePrefix + (string i)
+                                                            let newFunc = fun() -> funcWithLogging name func
+                                                            let ref = spawn system name (actorOf (fun msg -> handleMessage msg newFunc))
+                                                            do ref <! Execute                                                            
+                                                            ref))
+                            | _ -> return! loop state
+                }
+            loop []
+    do coordinatorRef <! Create
+    ()
+
 
