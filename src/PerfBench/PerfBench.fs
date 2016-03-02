@@ -147,7 +147,7 @@ let runTest namePrefix numUsers func =
                     match elem with
                       | n,(ref,Executing) when n = name -> 
                           //printfn "Elapsed Time for %s is %f" name time
-                          printfn "."
+                          printf "."
                           n,(ref,Succeeded time)
                       | n,(ref,status) -> n,(ref,status)
                     ))

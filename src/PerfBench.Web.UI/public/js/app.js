@@ -138,7 +138,8 @@ function onMessage(evt)
     }
 
   } else {
-    store.dispatch(addNewEvent(evt.data))
+    let data = JSON.parse(evt.data)
+    store.dispatch(addNewEvent(JSON.stringify(data.value)))
   }
   //websocket.close();
 }
