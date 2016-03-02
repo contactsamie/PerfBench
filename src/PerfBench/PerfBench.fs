@@ -82,8 +82,12 @@ let runTest namePrefix numUsers func =
                   fun cx -> socket {
                     do publishedEvent |> Observable.subscribe (fun x -> 
                                                                 let jsonSerializer = FsPickler.CreateJsonSerializer(indent = true)
-                                                                let str = Encoding.UTF8.GetBytes(jsonSerializer.PickleToString (x))
-                                                                do webSocket.send Text str true |> Async.StartAsTask                                                                
+                                                                let str = jsonSerializer.PickleToString (x)
+                                                                let data = Encoding.UTF8.GetBytes (str)
+                                                                let r = webSocket.send Text data true |> Async.StartAsTask        
+                                                                match r with
+                                                                 | unit -> () //printf "Sent %s" str
+                                                                 | Error -> printf "Error %A" r
                                                                 ) |> ignore                    
                     let loop = ref true
                     while !loop do
@@ -102,14 +106,17 @@ let runTest namePrefix numUsers func =
                   }
                 
                 let executingAssembly = Assembly.GetExecutingAssembly()
-                let sr = new StreamReader(executingAssembly.GetManifestResourceStream("index.html"));
-                let index = sr.ReadToEnd()
+                let srIndex = new StreamReader(executingAssembly.GetManifestResourceStream("index.html"));
+                let index = srIndex.ReadToEnd()
+                let srBundle = new StreamReader(executingAssembly.GetManifestResourceStream("bundle.js"));
+                let bundle = srBundle.ReadToEnd()
                 
                 let app : WebPart =
                   choose [
                     path "/websocket" >=> handShake echo
                     //GET >=> choose [ path "/" >=> file "index.html"; browseHome ];
-                    GET >=> choose [ path "/" >=> OK index ];
+                    GET >=> choose [ path "/" >=> OK index
+                                     path "/bundle.js" >=> OK bundle ];                    
                     NOT_FOUND "Found no handlers."
                     ]
   
@@ -140,7 +147,7 @@ let runTest namePrefix numUsers func =
                     match elem with
                       | n,(ref,Executing) when n = name -> 
                           //printfn "Elapsed Time for %s is %f" name time
-                          printf "."
+                          printfn "."
                           n,(ref,Succeeded time)
                       | n,(ref,status) -> n,(ref,status)
                     ))

@@ -53,7 +53,12 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="PerfBench.fs" />
     <Content Include="packages.config" />
-    <EmbeddedResource Include="index.html" />
+    <EmbeddedResource Include="..\PerfBench.Web.UI\public\bundle.js">
+      <Link>bundle.js</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\PerfBench.Web.UI\public\index.html">
+      <Link>index.html</Link>
+    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Akka">
