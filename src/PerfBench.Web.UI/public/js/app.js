@@ -10,11 +10,21 @@ let output;
 
 const event = (state, action) => {
   switch (action.type) {
-    case 'ADD_NEW_EVENT':
+    case 'StartedEvent':
       return {
         id: action.id,
         text: action.text,
+        type: action.type
       }
+    case 'FinishedEvent':
+      if (state.id != action.id) {
+          return state
+      }
+      //console.log(action.id)
+      return Object.assign({}, state, {
+          type: action.type,
+          text: action.text
+      })
     default:
       return state
   }
@@ -22,11 +32,16 @@ const event = (state, action) => {
 
 const events = (state = [], action) => {
   switch (action.type) {
-    case 'ADD_NEW_EVENT':
+    case 'StartedEvent':
       return [
         ...state,
         event(undefined, action)
       ]
+    case 'FinishedEvent':
+      return state.map(e =>
+        event(e, action)
+      )
+      return
     default:
       return state
   }
@@ -36,26 +51,34 @@ const eventsApp = combineReducers({
   events
 })
 
-function addNewEvent(text) {
+function startedEvent(_id, text) {
   return {
-    type: 'ADD_NEW_EVENT',
-    id: nextEventId++,
+    type: 'StartedEvent',
+    id: _id,//: nextEventId++,
     text
   }
 }
 
-const StreamingEvent = ({ text }) => (
-  <li>
-    {text}
+function finishedEvent(_id, text) {
+  return {
+    type: 'FinishedEvent',
+    id: _id,//: nextEventId++,
+    text
+  }
+}
+
+const StreamingEvent = ({ type, text }) => (
+  <li className={"flex-item " + type} title={text}>
   </li>
 )
 
 StreamingEvent.propTypes = {
+  type: PropTypes.string.isRequired,
   text: PropTypes.string.isRequired
 }
 
 const StreamingEventList = ({ events }) => (
-  <ul>
+  <ul className="flex-container">
     {events.map(event =>
       <StreamingEvent
         key={event.id}
@@ -115,6 +138,21 @@ function onClose(evt)
 function onMessage(evt)
 {
   //writeToScreen('<span style="color: blue;">RESPONSE: ' + evt.data+'</span>');
+  function dispatchEvent(event) {
+    switch (event.Case) {
+      case 'StartedEvent':
+        console.log("Started")
+        store.dispatch(startedEvent(parseInt(event.Item), ""))
+        break;
+      case 'FinishedEvent':
+        console.log("Finished")
+        store.dispatch(finishedEvent(event.Item1, event.Item2.toString()))
+        break;
+      default:
+        console.log("Unknown event")
+        break;
+    }
+  }
 
   if (initializing) {
     initializing = false
@@ -128,18 +166,19 @@ function onMessage(evt)
       document.getElementById('react')
     )
 
-    store.subscribe(() =>
-      console.log(store.getState())
-    )
+    //store.subscribe(() =>
+    //  console.log(store.getState())
+    //)
 
-    for (let e of data.value.contents) {
-      console.log(e)
-      store.dispatch(addNewEvent(JSON.stringify(e)))
+    let reversed = data.value.contents.reverse();
+    for (let e of reversed) {
+        dispatchEvent(e[0]);
     }
 
   } else {
-    let data = JSON.parse(evt.data)
-    store.dispatch(addNewEvent(JSON.stringify(data.value)))
+    let data = JSON.parse(evt.data)    
+    dispatchEvent(data.value)
+    //store.dispatch(addNewEvent(JSON.stringify(data.value)))
   }
   //websocket.close();
 }

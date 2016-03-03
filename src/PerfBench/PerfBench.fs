@@ -55,7 +55,7 @@ let private system = System.create "MySystem" <| Configuration.parse(config2)
 type private Messages = Execute
 type private CoordinatorMessages = Create | Finished of string*float | Stats
 type private TaskStatus = Executing | Succeeded of float | Failed of string
-type private Events = FinishedEvent of string*float
+type private Events = StartedEvent of string | FinishedEvent of string*float
 
 let private funcWithLogging name func parent = async {
   let timer = new System.Diagnostics.Stopwatch()
@@ -68,7 +68,7 @@ let private funcWithLogging name func parent = async {
 let runTest namePrefix numUsers func =
   let coordinatorRef =
     spawn system "Coordinator" <| fun mailbox ->
-      let event = new Event<'t>()
+      let event = new Event<Events>()
       let publishedEvent = event.Publish
       let events = ref List.empty
       do publishedEvent |> Observable.subscribe (fun x -> events := ([x] :: !events))
@@ -84,11 +84,9 @@ let runTest namePrefix numUsers func =
                                                                 let jsonSerializer = FsPickler.CreateJsonSerializer(indent = true)
                                                                 let str = jsonSerializer.PickleToString (x)
                                                                 let data = Encoding.UTF8.GetBytes (str)
-                                                                let r = webSocket.send Text data true |> Async.StartAsTask        
-                                                                match r with
-                                                                 | unit -> () //printf "Sent %s" str
-                                                                 | Error -> printf "Error %A" r
-                                                                ) |> ignore                    
+                                                                let r = webSocket.send Text data true |> Async.RunSynchronously
+                                                                ())
+                                                                
                     let loop = ref true
                     while !loop do
                       let! msg = webSocket.read()
@@ -136,7 +134,9 @@ let runTest namePrefix numUsers func =
                         actor { 
                             let! msg = mailbox.Receive()
                             match msg with
-                              | Execute -> Async.Start (newFunc())                                                                                                    
+                              | Execute -> 
+                                  do event.Trigger(StartedEvent name)
+                                  Async.Start (newFunc())                                                                                                    
                         }
                     loop []
                   do ref <! Execute                                                            
