@@ -2,6 +2,9 @@
 
 open Akka.FSharp
 open Akka.Configuration
+open Akka.Actor
+open Akka.Configuration
+open Akka.FSharp
 open System
 open System.Text
 open System.Reflection
@@ -66,117 +69,122 @@ let private funcWithLogging name func parent = async {
   result}
 
 let runTest namePrefix numUsers func =
+
+
   let coordinatorRef =
-    spawn system "Coordinator" <| fun mailbox ->
-      let event = new Event<Events>()
-      let publishedEvent = event.Publish
-      let events = ref List.empty
-      do publishedEvent |> Observable.subscribe (fun x -> events := ([x] :: !events))
-      let rec loop state =
-        actor {
-          let! msg = mailbox.Receive()                    
-          match msg with
-            | Create -> 
-              let webServerRef = spawn system "webServer" <| fun mailbox ->
-                let echo (webSocket : WebSocket) =
-                  fun cx -> socket {
-                    do publishedEvent |> Observable.subscribe (fun x -> 
-                                                                let jsonSerializer = FsPickler.CreateJsonSerializer(indent = true)
-                                                                let str = jsonSerializer.PickleToString (x)
-                                                                let data = Encoding.UTF8.GetBytes (str)
-                                                                let r = webSocket.send Text data true |> Async.RunSynchronously
-                                                                ())
-                                                                
-                    let loop = ref true
-                    while !loop do
-                      let! msg = webSocket.read()
-                      match msg with
-                      | (Text, data, true) ->                        
-                        let jsonSerializer = FsPickler.CreateJsonSerializer(indent = true)
-                        let str = Encoding.UTF8.GetBytes(jsonSerializer.PickleToString (events))
-                        do! webSocket.send Text str true
-                      | (Ping, _, _) ->
-                        do! webSocket.send Pong [||] true
-                      | (Close, _, _) ->
-                        do! webSocket.send Close [||] true
-                        loop := false
-                      | _ -> ()
-                  }
-                
-                let executingAssembly = Assembly.GetExecutingAssembly()
-                let srIndex = new StreamReader(executingAssembly.GetManifestResourceStream("index.html"));
-                let index = srIndex.ReadToEnd()
-                let srBundle = new StreamReader(executingAssembly.GetManifestResourceStream("bundle.js"));
-                let bundle = srBundle.ReadToEnd()
-                
-                let app : WebPart =
-                  choose [
-                    path "/websocket" >=> handShake echo
-                    //GET >=> choose [ path "/" >=> file "index.html"; browseHome ];
-                    GET >=> choose [ path "/" >=> OK index
-                                     path "/bundle.js" >=> OK bundle ];                    
-                    NOT_FOUND "Found no handlers."
-                    ]
+    spawnOpt system "Coordinator" 
+      <| fun mailbox ->
+          let event = new Event<Events>()
+          let publishedEvent = event.Publish
+          let events = ref List.empty
+          do publishedEvent |> Observable.subscribe (fun x -> events := ([x] :: !events))
+          let rec loop state =
+            actor {
+              let! msg = mailbox.Receive()                    
+              match msg with
+                | Create -> 
+                  let webServerRef = spawn system "webServer" <| fun mailbox ->
+                    let echo (webSocket : WebSocket) =
+                      fun cx -> socket {
+                        do publishedEvent |> Observable.subscribe (fun x -> 
+                                                                    let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false)
+                                                                    let str = jsonSerializer.PickleToString (x)
+                                                                    let data = Encoding.UTF8.GetBytes (str)
+                                                                    do webSocket.send Text data true |> Async.RunSynchronously 
+                                                                    )
+                                                                    
+                        let loop = ref true
+                        while !loop do
+                          let! msg = webSocket.read()
+                          match msg with
+                          | (Text, data, true) ->                        
+                            let jsonSerializer = FsPickler.CreateJsonSerializer(indent = true)
+                            let str = Encoding.UTF8.GetBytes(jsonSerializer.PickleToString (events))
+                            do! webSocket.send Text str true
+                          | (Ping, _, _) ->
+                            do! webSocket.send Pong [||] true
+                          | (Close, _, _) ->
+                            do! webSocket.send Close [||] true
+                            loop := false
+                          | _ -> ()
+                      }
+                    
+                    let executingAssembly = Assembly.GetExecutingAssembly()
+                    let srIndex = new StreamReader(executingAssembly.GetManifestResourceStream("index.html"));
+                    let index = srIndex.ReadToEnd()
+                    let srBundle = new StreamReader(executingAssembly.GetManifestResourceStream("bundle.js"));
+                    let bundle = srBundle.ReadToEnd()
+                    
+                    let app : WebPart =
+                      choose [
+                        path "/websocket" >=> handShake echo
+                        //GET >=> choose [ path "/" >=> file "index.html"; browseHome ];
+                        GET >=> choose [ path "/" >=> OK index
+                                         path "/bundle.js" >=> OK bundle ];                    
+                        NOT_FOUND "Found no handlers."
+                        ]
   
-                do startWebServer { defaultConfig with logger = Loggers.ConsoleWindowLogger LogLevel.Warn } app
-                let rec loop() =
-                    actor { 
-                        let! msg = mailbox.Receive()
-                        return! loop()                                                                                            
-                    }
-                loop()
-              return! loop ([1..numUsers] 
-                |> List.map (fun i ->         
-                  let name = namePrefix + (string i)                                                                                                                        
-                  let newFunc = fun() -> funcWithLogging name func mailbox.Self
-                  let ref = spawn system name <| fun mailbox ->
-                    let rec loop state =
+                    do startWebServer { defaultConfig with logger = Loggers.ConsoleWindowLogger LogLevel.Warn } app
+                    let rec loop() =
                         actor { 
                             let! msg = mailbox.Receive()
-                            match msg with
-                              | Execute -> 
-                                  do event.Trigger(StartedEvent name)
-                                  Async.Start (newFunc())                                                                                                    
+                            return! loop()                                                                                            
                         }
-                    loop []
-                  do ref <! Execute                                                            
-                  name,(ref,Executing)))
-            | Finished (name, time) -> 
-                let newState = (state
-                    |> List.map (fun elem ->
-                    match elem with
-                      | n,(ref,Executing) when n = name -> 
-                          //printfn "Elapsed Time for %s is %f" name time
-                          printf "."
-                          n,(ref,Succeeded time)
-                      | n,(ref,status) -> n,(ref,status)
-                    ))
-                let leftToProcess = newState |> List.filter (fun e -> 
-                                                            let n,(r,s) = e
-                                                            s = Executing)
-                                             |> List.length
-                do if (leftToProcess = 0) then mailbox.Self <! Stats
-                do event.Trigger(FinishedEvent (name,time))
-                //events := [FinishedEvent (name,time)] :: !events
-                return! loop newState
-            | Stats -> 
-                let average = state |> List.averageBy (fun e -> 
-                                        match e with
-                                            | n,(r,Succeeded s) -> s
-                                            | _ -> 0.0                                                        
-                                        )
-                let n,(r,Succeeded max) = state |> List.maxBy (fun e -> 
-                                        match e with
-                                            | n,(r,Succeeded s) -> s
-                                            | _ -> 0.0
-                                        )
-                printfn ""
-                printfn "Done processing batch."
-                printfn "Average processing time is %f" average
-                printfn "Max processing time is %f" max
-                //mystate := state
-                return! loop state
-        }
-      loop []
+                    loop()
+                  return! loop ([1..numUsers] 
+                    |> List.map (fun i ->         
+                      let name = namePrefix + (string i)                                                                                                                        
+                      let newFunc = fun() -> funcWithLogging name func mailbox.Self
+                      let ref = spawn system name <| fun mailbox ->
+                        let rec loop state =
+                            actor { 
+                                let! msg = mailbox.Receive()
+                                match msg with
+                                  | Execute -> 
+                                      do event.Trigger(StartedEvent name)
+                                      Async.Start (newFunc())                                                                                                    
+                            }
+                        loop []
+                      do ref <! Execute                                                            
+                      name,(ref,Executing)))
+                | Finished (name, time) -> 
+                    let newState = (state
+                        |> List.map (fun elem ->
+                        match elem with
+                          | n,(ref,Executing) when n = name -> 
+                              //printfn "Elapsed Time for %s is %f" name time
+                              printf "."
+                              n,(ref,Succeeded time)
+                          | n,(ref,status) -> n,(ref,status)
+                        ))
+                    let leftToProcess = newState |> List.filter (fun e -> 
+                                                                let n,(r,s) = e
+                                                                s = Executing)
+                                                 |> List.length
+                    do if (leftToProcess = 0) then mailbox.Self <! Stats
+                    do event.Trigger(FinishedEvent (name,time))
+                    return! loop newState
+                | Stats -> 
+                    let average = state |> List.averageBy (fun e -> 
+                                            match e with
+                                                | n,(r,Succeeded s) -> s
+                                                | _ -> 0.0                                                        
+                                            )
+                    let n,(r,Succeeded max) = state |> List.maxBy (fun e -> 
+                                            match e with
+                                                | n,(r,Succeeded s) -> s
+                                                | _ -> 0.0
+                                            )
+                    printfn ""
+                    printfn "Done processing batch."
+                    printfn "Average processing time is %f" average
+                    printfn "Max processing time is %f" max
+                    return! loop state
+            }
+          loop []
+      <| [ SpawnOption.SupervisorStrategy (
+            Strategy.OneForOne(fun e ->
+            match e with        
+            | _ -> Directive.Stop ))  ]
   do coordinatorRef <! Create
   ()    

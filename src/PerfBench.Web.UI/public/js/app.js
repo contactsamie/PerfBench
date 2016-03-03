@@ -74,7 +74,7 @@ const StreamingEvent = ({ type, text }) => (
 
 StreamingEvent.propTypes = {
   type: PropTypes.string.isRequired,
-  text: PropTypes.string.isRequired
+  //text: PropTypes.string.isRequired
 }
 
 const StreamingEventList = ({ events }) => (
@@ -91,8 +91,18 @@ const StreamingEventList = ({ events }) => (
 StreamingEventList.propTypes = {
     events: PropTypes.arrayOf(PropTypes.shape({
     id: PropTypes.number.isRequired,
-    text: PropTypes.string.isRequired
+    //text: PropTypes.string.isRequired
   }).isRequired).isRequired,
+}
+
+const Header = ({ average }) => (
+  <p>
+    {average}
+  </p>
+)
+
+Header.propTypes = {
+  average: PropTypes.number.isRequired
 }
 
 const mapStateToProps = (state) => {
@@ -101,12 +111,25 @@ const mapStateToProps = (state) => {
   }
 }
 
+const mapStateToHeaderProps = (state) => {
+  let f = state.events.filter(e => e.type == "FinishedEvent")
+  let finished = f.map(e => parseFloat(e.text))
+  return {
+    average: finished.reduce((a,b)=>a + b) / finished.length
+  }
+}
+
+const VisibleHeader = connect(
+  mapStateToHeaderProps
+)(Header)
+
 const VisibleEventList = connect(
   mapStateToProps
 )(StreamingEventList)
 
 const App = () => (
   <div>
+    <VisibleHeader />
     <VisibleEventList />
   </div>
 )
@@ -141,12 +164,12 @@ function onMessage(evt)
   function dispatchEvent(event) {
     switch (event.Case) {
       case 'StartedEvent':
-        console.log("Started")
+        //console.log("Started")
         store.dispatch(startedEvent(parseInt(event.Item), ""))
         break;
       case 'FinishedEvent':
-        console.log("Finished")
-        store.dispatch(finishedEvent(event.Item1, event.Item2.toString()))
+        //console.log("Finished")
+        store.dispatch(finishedEvent(parseInt(event.Item1), parseFloat(event.Item2)))
         break;
       default:
         console.log("Unknown event")
@@ -157,7 +180,14 @@ function onMessage(evt)
   if (initializing) {
     initializing = false
     let data = JSON.parse(evt.data)
+    let reversed = data.value.contents.reverse();
+    var initialState;
+
     store = createStore(eventsApp)//, evt.data.value.contents)
+
+    for (let e of reversed) {
+        dispatchEvent(e[0]);
+    }
 
     render(
       <Provider store={store}>
@@ -170,13 +200,8 @@ function onMessage(evt)
     //  console.log(store.getState())
     //)
 
-    let reversed = data.value.contents.reverse();
-    for (let e of reversed) {
-        dispatchEvent(e[0]);
-    }
-
   } else {
-    let data = JSON.parse(evt.data)    
+    let data = JSON.parse(evt.data)
     dispatchEvent(data.value)
     //store.dispatch(addNewEvent(JSON.stringify(data.value)))
   }
