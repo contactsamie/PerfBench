@@ -1,9 +1,10 @@
-import { createStore, combineReducers  } from 'redux'
+import 'babel-polyfill'
+import { createStore, combineReducers, applyMiddleware, compose } from 'redux'
+import thunk from 'redux-thunk'
 import React, { PropTypes } from 'react'
 import { connect, Provider  } from 'react-redux'
 import { render } from 'react-dom'
 
-let nextEventId = 0
 let websocket;
 let wsUri = "ws://localhost:8083/websocket";
 let output;
@@ -54,7 +55,7 @@ const eventsApp = combineReducers({
 function startedEvent(_id, text) {
   return {
     type: 'StartedEvent',
-    id: _id,//: nextEventId++,
+    id: _id,
     text
   }
 }
@@ -62,7 +63,7 @@ function startedEvent(_id, text) {
 function finishedEvent(_id, text) {
   return {
     type: 'FinishedEvent',
-    id: _id,//: nextEventId++,
+    id: _id,
     text
   }
 }
@@ -95,14 +96,16 @@ StreamingEventList.propTypes = {
   }).isRequired).isRequired,
 }
 
-const Header = ({ average }) => (
-  <p>
-    {average}
-  </p>
+const Header = ({ average, max }) => (
+  <ul>
+    <li>Average: {average}</li>
+    <li>Maximum: {max}</li>
+  </ul>
 )
 
 Header.propTypes = {
-  average: PropTypes.number.isRequired
+  average: PropTypes.number.isRequired,
+  max: PropTypes.number.isRequired
 }
 
 const mapStateToProps = (state) => {
@@ -115,7 +118,8 @@ const mapStateToHeaderProps = (state) => {
   let f = state.events.filter(e => e.type == "FinishedEvent")
   let finished = f.map(e => parseFloat(e.text))
   return {
-    average: finished.reduce((a,b)=>a + b) / finished.length
+    average: finished.reduce((a,b)=>a + b) / finished.length,
+    max: Math.max.apply(Math, finished)
   }
 }
 
@@ -183,7 +187,12 @@ function onMessage(evt)
     let reversed = data.value.contents.reverse();
     var initialState;
 
-    store = createStore(eventsApp)//, evt.data.value.contents)
+    const finalCreateStore = compose(
+      applyMiddleware(thunk),
+      window.devToolsExtension ? window.devToolsExtension() : f => f
+    )(createStore);
+
+    store = finalCreateStore(eventsApp)//, evt.data.value.contents)
 
     for (let e of reversed) {
         dispatchEvent(e[0]);
