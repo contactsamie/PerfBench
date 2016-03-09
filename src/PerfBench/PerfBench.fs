@@ -29,6 +29,7 @@ open Suave.Utils
 open Suave.Sockets
 open Suave.Sockets.Control
 open Suave.WebSocket
+open System.Collections.Generic
 
 // initialize akka
 let private config = @"
@@ -71,6 +72,15 @@ type private Events =
   | StartedEvent of string
   | FinishedEvent of string * float
   | FailedEvent of string * float
+
+type Swarm = 
+  { Name : string
+    Size : int}
+
+type HiveEvents = 
+  | CreateSwarm of Swarm
+
+type HiveBrains = {Name:string; brain:unit->Async<unit>}
 
 let webServerActor events publishedEvent = 
   spawn system "webServer" <| fun mailbox -> 
@@ -184,9 +194,9 @@ let private printStats state time =
   printfn "Average processing time for failed drones is %f" failedAverage
   printfn "Max processing time for failed drones is %f" failedMax
 
-let unleashSwarm swarmName swarmSize func = 
+let createSwarm swarmName swarmSize func parent = 
   let coordinatorRef = 
-    spawnOpt system (swarmName + "-coordinator") <| (fun mailbox -> 
+    spawnOpt parent (swarmName + "-swarm") <| (fun mailbox -> 
     let timer = new System.Diagnostics.Stopwatch()
     do timer.Start()
     let event = new Event<Events>()
@@ -199,7 +209,7 @@ let unleashSwarm swarmName swarmSize func =
         //printf "%A" msg
         match msg with
         | Create -> 
-          let webServerRef = webServerActor events publishedEvent
+          //let webServerRef = webServerActor events publishedEvent
           return! loop ([ 1..swarmSize ] |> List.map (fun i -> 
                                               let name = swarmName + "-drone-" + (string i)
                                               //let droneBrains = fun () -> augmentBrain name func mailbox.Self
@@ -241,3 +251,29 @@ let unleashSwarm swarmName swarmSize func =
                                             Directive.Stop)) ]
   do coordinatorRef <! Create
   ()
+
+let brains = ref Map.empty
+
+let hiveRef = 
+  spawnOpt system ("Hive") <| (fun mailbox -> 
+
+  let rec loop state = 
+    actor { 
+      let! msg = mailbox.Receive()
+      match msg with
+      | CreateSwarm m -> createSwarm m.Name m.Size (!brains).[m.Name] mailbox
+      return! loop state
+    }
+  loop [])
+  <| [ SpawnOption.SupervisorStrategy(Strategy.OneForOne(fun e -> 
+                                        match e with
+                                        | _ -> Directive.Stop)) ]
+
+let newSwarm swarmName swarmSize (func:unit->Async<unit>) = 
+  let x = 
+    CreateSwarm { Name = swarmName
+                  Size = swarmSize}
+
+  brains := (!brains).Add(swarmName, func)
+
+  hiveRef <! x
