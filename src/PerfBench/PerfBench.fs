@@ -129,9 +129,7 @@ let private drone name (event : Event<Events>) brain (parent : Actor<Coordinator
         | Execute -> 
           async { 
             timer.Start()
-            let! result = Async.Catch(brain())
-            //printfn "finished drone %s" name
-            //parent.Self <! Finished(name, timer.Elapsed.TotalSeconds)
+            let! result = brain() |> Async.Catch
             timer.Stop()
             match result with
             | Choice1Of2 _ -> return Finished(Success, name, timer.Elapsed.TotalSeconds)
@@ -140,6 +138,51 @@ let private drone name (event : Event<Events>) brain (parent : Actor<Coordinator
           |!> parent.Self
       }
     loop []
+
+let private getAverage list = 
+  match list with
+  | [] -> 0.0
+  | l -> 
+    l |> List.averageBy (fun e -> 
+           match e with
+           | n, (r, Succeeded t) -> t
+           | n, (r, Failed(s, t)) -> t)
+
+let private getMax list = 
+  match list with
+  | [] -> 0.0
+  | l -> 
+    let maxElement = 
+      l |> List.maxBy (fun e -> 
+             match e with
+             | n, (r, Succeeded t) -> t
+             | n, (r, Failed(s, t)) -> t)
+    match maxElement with
+    | n, (r, Succeeded t) -> t
+    | n, (r, Failed(s, t)) -> t
+
+let private printStats state time = 
+  let (successfulDrones, failedDrones) = 
+    state |> List.partition (fun e -> 
+               match e with
+               | n, (r, Succeeded s) -> true
+               | _ -> false)
+  
+  let successfulAverage = getAverage successfulDrones
+  let failedAverage = getAverage failedDrones
+  let successfulMax = getMax successfulDrones
+  let failedMax = getMax failedDrones
+  printfn ""
+  printfn "Total: %d drones" state.Length
+  printfn "Processing Time: %f " time
+  printfn ""
+  printfn "Succeeded: %d drones" successfulDrones.Length
+  printfn "Average processing time is %f" successfulAverage
+  printfn "Max processing time is %f" successfulMax
+  printfn ""
+  printfn "Failed: %d drones" failedDrones.Length
+  printfn "Average processing time for failed drones is %f" failedAverage
+  printfn "Max processing time for failed drones is %f" failedMax
 
 let unleashSwarm swarmName swarmSize func = 
   let coordinatorRef = 
@@ -186,29 +229,8 @@ let unleashSwarm swarmName swarmSize func =
           do event.Trigger(FinishedEvent(name, time))
           return! loop newState
         | Stats -> 
-          let average = 
-            state |> List.averageBy (fun e -> 
-                       match e with
-                       | n, (r, Succeeded s) -> s
-                       | _ -> 0.0)
-          
-          let _, (_, maxDrone) = 
-            state |> List.maxBy (fun e -> 
-                       match e with
-                       | _, (_, Succeeded t) -> t
-                       | _, (_, Failed(s, t)) -> t
-                       | _ -> 0.0)
-          
-          let max = 
-            match maxDrone with
-            | Succeeded t -> t
-            | Failed(s, t) -> t
-          
-          printfn ""
-          printfn "Done processing batch. It took %f seconds total" timer.Elapsed.TotalSeconds
           timer.Stop()
-          printfn "Average processing time is %f" average
-          printfn "Max processing time is %f" max
+          printStats state timer.Elapsed.TotalSeconds
           return! loop state
       }
     loop [])
