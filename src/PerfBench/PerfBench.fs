@@ -30,6 +30,7 @@ open Suave.Sockets
 open Suave.Sockets.Control
 open Suave.WebSocket
 open System.Collections.Generic
+open System.Threading
 
 // initialize akka
 let private config = @"
@@ -73,58 +74,17 @@ type private Events =
   | FinishedEvent of string * float
   | FailedEvent of string * float
 
-type Swarm = 
+type private Swarm = 
   { Name : string
     Size : int}
 
-type HiveEvents = 
+type private HiveEvents = 
   | CreateSwarm of Swarm
+  | DroneReply of Events
 
 type HiveBrains = {Name:string; brain:unit->Async<unit>}
 
-let webServerActor events publishedEvent = 
-  spawn system "webServer" <| fun mailbox -> 
-    let echo (webSocket : WebSocket) = 
-      fun cx -> 
-        socket { 
-          do publishedEvent |> Observable.subscribe (fun x -> 
-                                 let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false)
-                                 let str = jsonSerializer.PickleToString(x)
-                                 let data = Encoding.UTF8.GetBytes(str)
-                                 do webSocket.send Text data true |> Async.RunSynchronously)
-          let loop = ref true
-          while !loop do
-            let! msg = webSocket.read()
-            match msg with
-            | (Text, data, true) -> 
-              let jsonSerializer = FsPickler.CreateJsonSerializer(indent = true)
-              let str = Encoding.UTF8.GetBytes(jsonSerializer.PickleToString(events))
-              do! webSocket.send Text str true
-            | (Ping, _, _) -> do! webSocket.send Pong [||] true
-            | (Close, _, _) -> 
-              do! webSocket.send Close [||] true
-              loop := false
-            | _ -> ()
-        }
-    
-    let executingAssembly = Assembly.GetExecutingAssembly()
-    let srIndex = new StreamReader(executingAssembly.GetManifestResourceStream("index.html"))
-    let index = srIndex.ReadToEnd()
-    let srBundle = new StreamReader(executingAssembly.GetManifestResourceStream("bundle.js"))
-    let bundle = srBundle.ReadToEnd()
-    
-    let app : WebPart = 
-      choose [ path "/websocket" >=> handShake echo
-               //GET >=> choose [ path "/" >=> file "index.html"; browseHome ];
-               GET >=> choose [ path "/" >=> OK index
-                                path "/bundle.js" >=> OK bundle ]
-               NOT_FOUND "Found no handlers." ]
-    do startWebServer { defaultConfig with logger = Loggers.ConsoleWindowLogger LogLevel.Warn } app
-    let rec loop() = actor { let! msg = mailbox.Receive()
-                             return! loop() }
-    loop()
-
-let private drone name (event : Event<Events>) brain (parent : Actor<CoordinatorMessages>) = 
+let private drone name brain (parent : Actor<CoordinatorMessages>) = 
   spawn parent name <| fun droneMailbox -> 
     //printfn "starting drone %s" name
     let timer = new System.Diagnostics.Stopwatch()
@@ -194,27 +154,22 @@ let private printStats state time =
   printfn "Average processing time for failed drones is %f" failedAverage
   printfn "Max processing time for failed drones is %f" failedMax
 
-let createSwarm swarmName swarmSize func parent = 
+let private createSwarm swarmName swarmSize func parent = 
   let coordinatorRef = 
     spawnOpt parent (swarmName + "-swarm") <| (fun mailbox -> 
     let timer = new System.Diagnostics.Stopwatch()
     do timer.Start()
-    let event = new Event<Events>()
-    let publishedEvent = event.Publish
-    let events = ref List.empty
-    do publishedEvent |> Observable.subscribe (fun x -> events := ([ x ] :: !events))
     let rec loop state = 
       actor { 
         let! msg = mailbox.Receive()
         //printf "%A" msg
         match msg with
         | Create -> 
-          //let webServerRef = webServerActor events publishedEvent
           return! loop ([ 1..swarmSize ] |> List.map (fun i -> 
                                               let name = swarmName + "-drone-" + (string i)
-                                              //let droneBrains = fun () -> augmentBrain name func mailbox.Self
-                                              let ref = drone name event func mailbox
+                                              let ref = drone name func mailbox
                                               do ref <! Execute
+                                              do mailbox.Context.Parent <! DroneReply (StartedEvent name)
                                               name, (ref, Executing)))
         | Finished(status, name, time) -> 
           let newState = 
@@ -236,7 +191,7 @@ let createSwarm swarmName swarmSize func parent =
             |> List.length
           
           do if (leftToProcess = 0) then mailbox.Self <! Stats
-          do event.Trigger(FinishedEvent(name, time))
+          mailbox.Context.Parent <! DroneReply (FinishedEvent(name, time))
           return! loop newState
         | Stats -> 
           timer.Stop()
@@ -255,13 +210,77 @@ let createSwarm swarmName swarmSize func parent =
 let brains = ref Map.empty
 
 let hiveRef = 
-  spawnOpt system ("Hive") <| (fun mailbox -> 
+  spawnOpt system ("Hive") <| (fun hiveMailbox -> 
+  let event = new Event<Events>() //
+  let publishedEvent = event.Publish //
+  let events = ref List.empty //
+  do publishedEvent.Add(fun x -> events := ([ x ] :: !events))
+
+  let webServerRef =
+    spawn system "webServer" <| fun mailbox -> 
+      let echo (webSocket : WebSocket) = 
+
+        let wsSender = MailboxProcessor.Start(fun inbox-> 
+          let rec messageLoop = async {                
+            let! msg = inbox.Receive()
+            let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false)
+            let str = jsonSerializer.PickleToString(msg)
+            let data = Encoding.UTF8.GetBytes(str)
+            let! a =  webSocket.send Text data true
+            return! messageLoop  
+          }
+          messageLoop)
+
+        let notifyLoop = async { 
+          while true do 
+            let! msg = Async.AwaitEvent publishedEvent
+            wsSender.Post msg
+            return ()
+          }
+
+        let cts = new CancellationTokenSource()
+        Async.Start(notifyLoop, cts.Token)
+
+        fun cx -> 
+          socket { 
+            let loop = ref true
+            while !loop do
+              let! msg = webSocket.read()
+              match msg with
+              | (Text, data, true) -> 
+                let jsonSerializer = FsPickler.CreateJsonSerializer(indent = true)
+                let str = Encoding.UTF8.GetBytes(jsonSerializer.PickleToString(events))
+                do! webSocket.send Text str true
+              | (Ping, _, _) -> do! webSocket.send Pong [||] true
+              | (Close, _, _) -> 
+                do! webSocket.send Close [||] true
+                loop := false
+              | _ -> ()
+          }
+      
+      let executingAssembly = Assembly.GetExecutingAssembly()
+      let srIndex = new StreamReader(executingAssembly.GetManifestResourceStream("index.html"))
+      let index = srIndex.ReadToEnd()
+      let srBundle = new StreamReader(executingAssembly.GetManifestResourceStream("bundle.js"))
+      let bundle = srBundle.ReadToEnd()
+      
+      let app : WebPart = 
+        choose [ path "/websocket" >=> handShake echo
+                 //GET >=> choose [ path "/" >=> file "index.html"; browseHome ];
+                 GET >=> choose [ path "/" >=> OK index
+                                  path "/bundle.js" >=> OK bundle ]
+                 NOT_FOUND "Found no handlers." ]
+      do startWebServer { defaultConfig with logger = Loggers.ConsoleWindowLogger LogLevel.Warn } app
+      let rec loop() = actor { let! msg = mailbox.Receive()
+                               return! loop() }
+      loop()
 
   let rec loop state = 
     actor { 
-      let! msg = mailbox.Receive()
+      let! msg = hiveMailbox.Receive()
       match msg with
-      | CreateSwarm m -> createSwarm m.Name m.Size (!brains).[m.Name] mailbox
+      | CreateSwarm m -> createSwarm m.Name m.Size (!brains).[m.Name] hiveMailbox
+      | DroneReply m -> event.Trigger(m)
       return! loop state
     }
   loop [])

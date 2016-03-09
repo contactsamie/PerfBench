@@ -118,7 +118,7 @@ const mapStateToHeaderProps = (state) => {
   let f = state.events.filter(e => e.type == "FinishedEvent")
   let finished = f.map(e => parseFloat(e.text))
   return {
-    average: finished.reduce((a,b)=>a + b) / finished.length,
+    average: finished.reduce((a,b)=>a + b, 0) / finished.length,
     max: Math.max.apply(Math, finished)
   }
 }
@@ -164,16 +164,21 @@ function onClose(evt)
 }
 function onMessage(evt)
 {
-  //writeToScreen('<span style="color: blue;">RESPONSE: ' + evt.data+'</span>');
+  function getNumericId(item)
+  {
+    let s = item.split("-")
+    return s.pop()
+  }
+
   function dispatchEvent(event) {
     switch (event.Case) {
       case 'StartedEvent':
         //console.log("Started")
-        store.dispatch(startedEvent(parseInt(event.Item), ""))
+        store.dispatch(startedEvent(parseInt(getNumericId(event.Item)), ""))
         break;
       case 'FinishedEvent':
         //console.log("Finished")
-        store.dispatch(finishedEvent(parseInt(event.Item1), parseFloat(event.Item2)))
+        store.dispatch(finishedEvent(parseInt(getNumericId(event.Item1)), parseFloat(event.Item2)))
         break;
       default:
         console.log("Unknown event")
