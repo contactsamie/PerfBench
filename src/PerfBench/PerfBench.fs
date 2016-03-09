@@ -188,10 +188,13 @@ let private createSwarm swarmName swarmSize func parent =
             |> List.filter (fun e -> 
                  let n, (r, s) = e
                  s = Executing)
-            |> List.length
-          
-          do if (leftToProcess = 0) then mailbox.Self <! Stats
-          mailbox.Context.Parent <! DroneReply (FinishedEvent(name, time))
+            |> List.length          
+
+          match status with
+            | Success -> mailbox.Context.Parent <! DroneReply (FinishedEvent(name, time))
+            | Failure message -> mailbox.Context.Parent <! DroneReply (FailedEvent(name, time))
+
+          do if (leftToProcess = 0) then mailbox.Self <! Stats                    
           return! loop newState
         | Stats -> 
           timer.Stop()

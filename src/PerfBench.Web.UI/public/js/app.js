@@ -21,7 +21,14 @@ const event = (state, action) => {
       if (state.id != action.id) {
           return state
       }
-      //console.log(action.id)
+      return Object.assign({}, state, {
+          type: action.type,
+          text: action.text
+      })
+    case 'FailedEvent':
+      if (state.id != action.id) {
+          return state
+      }
       return Object.assign({}, state, {
           type: action.type,
           text: action.text
@@ -43,6 +50,11 @@ const events = (state = [], action) => {
         event(e, action)
       )
       return
+    case 'FailedEvent':
+        return state.map(e =>
+          event(e, action)
+        )
+        return
     default:
       return state
   }
@@ -63,6 +75,14 @@ function startedEvent(_id, text) {
 function finishedEvent(_id, text) {
   return {
     type: 'FinishedEvent',
+    id: _id,
+    text
+  }
+}
+
+function failedEvent(_id, text) {
+  return {
+    type: 'FailedEvent',
     id: _id,
     text
   }
@@ -180,6 +200,9 @@ function onMessage(evt)
         //console.log("Finished")
         store.dispatch(finishedEvent(parseInt(getNumericId(event.Item1)), parseFloat(event.Item2)))
         break;
+      case 'FailedEvent':
+          store.dispatch(failedEvent(parseInt(getNumericId(event.Item1)), parseFloat(event.Item2)))
+          break;
       default:
         console.log("Unknown event")
         break;
