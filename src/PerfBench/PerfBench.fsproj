@@ -51,6 +51,8 @@
   <Import Project="$(FSharpTargetsPath)" />
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Types.fs" />
+    <Compile Include="Helpers.fs" />
     <Compile Include="PerfBench.fs" />
     <Content Include="packages.config" />
     <EmbeddedResource Include="..\PerfBench.Web.UI\public\bundle.js">
