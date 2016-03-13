@@ -76,13 +76,15 @@ type private Events =
 
 type private Swarm = 
   { Name : string
-    Size : int}
+    Size : int }
 
 type private HiveEvents = 
   | CreateSwarm of Swarm
   | DroneReply of Events
 
-type HiveBrains = {Name:string; brain:unit->Async<unit>}
+type HiveBrains = 
+  { Name : string
+    brain : unit -> Async<unit> }
 
 let private drone name brain (parent : Actor<CoordinatorMessages>) = 
   spawn parent name <| fun droneMailbox -> 
@@ -169,7 +171,7 @@ let private createSwarm swarmName swarmSize func parent =
                                               let name = swarmName + "-drone-" + (string i)
                                               let ref = drone name func mailbox
                                               do ref <! Execute
-                                              do mailbox.Context.Parent <! DroneReply (StartedEvent name)
+                                              do mailbox.Context.Parent <! DroneReply(StartedEvent name)
                                               name, (ref, Executing)))
         | Finished(status, name, time) -> 
           let newState = 
@@ -188,13 +190,12 @@ let private createSwarm swarmName swarmSize func parent =
             |> List.filter (fun e -> 
                  let n, (r, s) = e
                  s = Executing)
-            |> List.length          
-
+            |> List.length
+          
           match status with
-            | Success -> mailbox.Context.Parent <! DroneReply (FinishedEvent(name, time))
-            | Failure message -> mailbox.Context.Parent <! DroneReply (FailedEvent(name, time))
-
-          do if (leftToProcess = 0) then mailbox.Self <! Stats                    
+          | Success -> mailbox.Context.Parent <! DroneReply(FinishedEvent(name, time))
+          | Failure message -> mailbox.Context.Parent <! DroneReply(FailedEvent(name, time))
+          do if (leftToProcess = 0) then mailbox.Self <! Stats
           return! loop newState
         | Stats -> 
           timer.Stop()
@@ -204,8 +205,7 @@ let private createSwarm swarmName swarmSize func parent =
     loop [])
     <| [ SpawnOption.SupervisorStrategy(Strategy.OneForOne(fun e -> 
                                           match e with
-                                          | _ -> 
-                                            //printfn "failed at parent"
+                                          | _ ->                                             
                                             Directive.Stop)) ]
   do coordinatorRef <! Create
   ()
@@ -214,36 +214,36 @@ let brains = ref Map.empty
 
 let hiveRef = 
   spawnOpt system ("Hive") <| (fun hiveMailbox -> 
-  let event = new Event<Events>() //
-  let publishedEvent = event.Publish //
-  let events = ref List.empty //
+  let event = new Event<Events>()
+  let publishedEvent = event.Publish
+  let events = ref List.empty
   do publishedEvent.Add(fun x -> events := ([ x ] :: !events))
-
-  let webServerRef =
+  let webServerRef = 
     spawn system "webServer" <| fun mailbox -> 
       let echo (webSocket : WebSocket) = 
-
-        let wsSender = MailboxProcessor.Start(fun inbox-> 
-          let rec messageLoop = async {                
-            let! msg = inbox.Receive()
-            let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false)
-            let str = jsonSerializer.PickleToString(msg)
-            let data = Encoding.UTF8.GetBytes(str)
-            let! a =  webSocket.send Text data true
-            return! messageLoop  
+        let wsSender = 
+          MailboxProcessor.Start(fun inbox -> 
+            let rec messageLoop = 
+              async { 
+                let! msg = inbox.Receive()
+                let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false)
+                let str = jsonSerializer.PickleToString(msg)
+                let data = Encoding.UTF8.GetBytes(str)
+                let! a = webSocket.send Text data true
+                return! messageLoop
+              }
+            messageLoop)
+        
+        let notifyLoop = 
+          async { 
+            while true do
+              let! msg = Async.AwaitEvent publishedEvent
+              wsSender.Post msg
+              return ()
           }
-          messageLoop)
-
-        let notifyLoop = async { 
-          while true do 
-            let! msg = Async.AwaitEvent publishedEvent
-            wsSender.Post msg
-            return ()
-          }
-
+        
         let cts = new CancellationTokenSource()
         Async.Start(notifyLoop, cts.Token)
-
         fun cx -> 
           socket { 
             let loop = ref true
@@ -277,7 +277,7 @@ let hiveRef =
       let rec loop() = actor { let! msg = mailbox.Receive()
                                return! loop() }
       loop()
-
+  
   let rec loop state = 
     actor { 
       let! msg = hiveMailbox.Receive()
@@ -286,16 +286,15 @@ let hiveRef =
       | DroneReply m -> event.Trigger(m)
       return! loop state
     }
+  
   loop [])
   <| [ SpawnOption.SupervisorStrategy(Strategy.OneForOne(fun e -> 
                                         match e with
                                         | _ -> Directive.Stop)) ]
 
-let newSwarm swarmName swarmSize (func:unit->Async<unit>) = 
+let newSwarm swarmName swarmSize (func : unit -> Async<unit>) = 
   let x = 
     CreateSwarm { Name = swarmName
-                  Size = swarmSize}
-
+                  Size = swarmSize }
   brains := (!brains).Add(swarmName, func)
-
   hiveRef <! x
