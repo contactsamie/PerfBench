@@ -182,6 +182,7 @@ function onClose(evt)
 {
   writeToScreen("DISCONNECTED");
 }
+
 function onMessage(evt)
 {
   function getNumericId(item)
