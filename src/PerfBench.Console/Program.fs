@@ -55,6 +55,6 @@ let main argv =
         }
     
     System.Threading.ThreadPool.SetMaxThreads(600, 1000) |> ignore
-    do newSwarm "test" 100 doStuffThatFails
+    do newSwarm "test" 1000 doStuffThatFails
     System.Console.ReadLine() |> ignore
     0

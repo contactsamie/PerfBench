@@ -5,9 +5,9 @@ import React, { PropTypes } from 'react'
 import { connect, Provider  } from 'react-redux'
 import { render } from 'react-dom'
 
-let websocket;
-let wsUri = "ws://localhost:8083/websocket";
-let output;
+let websocket
+let wsUri = "ws://localhost:8083/websocket"
+let output
 
 const event = (state, action) => {
   switch (action.type) {
@@ -88,10 +88,25 @@ function failedEvent(_id, text) {
   }
 }
 
-const StreamingEvent = ({ type, text }) => (
-  <li className={"flex-item " + type} title={text}>
-  </li>
-)
+class StreamingEvent extends React.Component {
+  constructor(props) {
+    super(props);
+    this.shouldComponentUpdate = function shouldComponentUpdate( newProps, newState ) {
+        if (props.type == newProps.type) {
+          return false;
+        }
+        return true;
+      }
+  }
+
+  render () {
+    let { type, text } = this.props
+    return (
+      <li className={"flex-item " + type} title={text}>
+      </li>
+    )
+  }
+}
 
 StreamingEvent.propTypes = {
   type: PropTypes.string.isRequired,
@@ -158,8 +173,34 @@ const App = () => (
   </div>
 )
 
-var initializing = true;
-var store;
+let initializing = true
+let store
+
+function getNumericId(item)
+{
+  let s = item.split("-")
+  return s.pop()
+}
+
+function dispatchEvent(event) {
+  switch (event.Case) {
+    case 'StartedEvent':
+    //console.log("Started")
+    store.dispatch(startedEvent(parseInt(getNumericId(event.Item)), ""))
+    break;
+    case 'FinishedEvent':
+    //console.log("Finished")
+    store.dispatch(finishedEvent(parseInt(getNumericId(event.Item1)), parseFloat(event.Item2)))
+    break;
+    case 'FailedEvent':
+    store.dispatch(failedEvent(parseInt(getNumericId(event.Item1)), parseFloat(event.Item2)))
+    break;
+    default:
+    console.log("Unknown event")
+    break;
+  }
+}
+
 function init()
 {
   output = document.getElementById("output");
@@ -185,31 +226,6 @@ function onClose(evt)
 
 function onMessage(evt)
 {
-  function getNumericId(item)
-  {
-    let s = item.split("-")
-    return s.pop()
-  }
-
-  function dispatchEvent(event) {
-    switch (event.Case) {
-      case 'StartedEvent':
-        //console.log("Started")
-        store.dispatch(startedEvent(parseInt(getNumericId(event.Item)), ""))
-        break;
-      case 'FinishedEvent':
-        //console.log("Finished")
-        store.dispatch(finishedEvent(parseInt(getNumericId(event.Item1)), parseFloat(event.Item2)))
-        break;
-      case 'FailedEvent':
-          store.dispatch(failedEvent(parseInt(getNumericId(event.Item1)), parseFloat(event.Item2)))
-          break;
-      default:
-        console.log("Unknown event")
-        break;
-    }
-  }
-
   if (initializing) {
     initializing = false
     let data = JSON.parse(evt.data)
