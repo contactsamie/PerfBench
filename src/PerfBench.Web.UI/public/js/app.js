@@ -4,63 +4,51 @@ import thunk from 'redux-thunk'
 import React, { PropTypes } from 'react'
 import { connect, Provider  } from 'react-redux'
 import { render } from 'react-dom'
+import PureRenderMixin from 'react-addons-pure-render-mixin';
 
 let websocket
 let wsUri = "ws://localhost:8083/websocket"
 let output
 
-const event = (state, action) => {
+const event = (e, action) => {
   switch (action.type) {
     case 'StartedEvent':
-      return {
-        id: action.id,
-        text: action.text,
-        type: action.type
-      }
+    return {
+      id: action.id,
+      text: action.text,
+      type: action.type
+    }
     case 'FinishedEvent':
-      if (state.id != action.id) {
-          return state
-      }
-      return Object.assign({}, state, {
-          type: action.type,
-          text: action.text
-      })
     case 'FailedEvent':
-      if (state.id != action.id) {
-          return state
-      }
-      return Object.assign({}, state, {
-          type: action.type,
-          text: action.text
-      })
+    if (e.id === action.id) {
+      return { ...e, type: action.type, text: action.text }
+    }
+    return e;
     default:
-      return state
+    return e
   }
 }
 
 const events = (state = [], action) => {
+  //console.log("state: " + JSON.stringify(state))
   switch (action.type) {
     case 'StartedEvent':
-      return [
-        ...state,
-        event(undefined, action)
-      ]
+    return [
+      ...state,
+      event(undefined, action)
+    ]
     case 'FinishedEvent':
-      return state.map(e =>
-        event(e, action)
-      )
-      return
     case 'FailedEvent':
-        return state.map(e =>
-          event(e, action)
-        )
-        return
+    return state.map(e =>
+      event(e, action)
+    )
+    return
     default:
-      return state
+    return state
   }
 }
 
-const eventsApp = combineReducers({
+const eventsReducers = combineReducers({
   events
 })
 
@@ -91,15 +79,11 @@ function failedEvent(_id, text) {
 class StreamingEvent extends React.Component {
   constructor(props) {
     super(props);
-    this.shouldComponentUpdate = function shouldComponentUpdate( newProps, newState ) {
-        if (props.type == newProps.type) {
-          return false;
-        }
-        return true;
-      }
+    this.shouldComponentUpdate = PureRenderMixin.shouldComponentUpdate.bind(this);
   }
 
   render () {
+    //console.log("Rendering - " + JSON.stringify(this.props))
     let { type, text } = this.props
     return (
       <li className={"flex-item " + type} title={text}>
@@ -110,31 +94,33 @@ class StreamingEvent extends React.Component {
 
 StreamingEvent.propTypes = {
   type: PropTypes.string.isRequired,
-  //text: PropTypes.string.isRequired
+  text: PropTypes.number.isRequired
 }
 
-const StreamingEventList = ({ events }) => (
+const StreamingEventList = ({ events }) =>
+(
   <ul className="flex-container">
-    {events.map(event =>
-      <StreamingEvent
-        key={event.id}
-        {...event}
-      />
-    )}
+  {events.map(event =>
+    <StreamingEvent
+    key={event.id}
+    {...event}
+    />
+  )}
   </ul>
 )
 
 StreamingEventList.propTypes = {
-    events: PropTypes.arrayOf(PropTypes.shape({
+  events: PropTypes.arrayOf(PropTypes.shape({
     id: PropTypes.number.isRequired,
-    //text: PropTypes.string.isRequired
+    text: PropTypes.string.number,
+    type: PropTypes.string.isRequired
   }).isRequired).isRequired,
 }
 
 const Header = ({ average, max }) => (
   <ul>
-    <li>Average: {average}</li>
-    <li>Maximum: {max}</li>
+  <li>Average: {average}</li>
+  <li>Maximum: {max}</li>
   </ul>
 )
 
@@ -144,6 +130,7 @@ Header.propTypes = {
 }
 
 const mapStateToProps = (state) => {
+  //console.log("STATE:" + JSON.stringify(state.events))
   return {
     events: state.events
   }
@@ -179,24 +166,24 @@ let store
 function getNumericId(item)
 {
   let s = item.split("-")
-  return s.pop()
+  return parseInt(s.pop())
 }
 
 function dispatchEvent(event) {
   switch (event.Case) {
     case 'StartedEvent':
-    //console.log("Started")
-    store.dispatch(startedEvent(parseInt(getNumericId(event.Item)), ""))
+    //console.log("Started " + getNumericId(event.Item))
+    store.dispatch(startedEvent(getNumericId(event.Item), 0.0))
     break;
     case 'FinishedEvent':
-    //console.log("Finished")
-    store.dispatch(finishedEvent(parseInt(getNumericId(event.Item1)), parseFloat(event.Item2)))
+    //console.log("Finished " + getNumericId(event.Item1))
+    store.dispatch(finishedEvent(getNumericId(event.Item1), parseFloat(event.Item3)))
     break;
     case 'FailedEvent':
-    store.dispatch(failedEvent(parseInt(getNumericId(event.Item1)), parseFloat(event.Item2)))
+    store.dispatch(failedEvent(getNumericId(event.Item1), parseFloat(event.Item3)))
     break;
     default:
-    console.log("Unknown event")
+    //console.log("Unknown event")
     break;
   }
 }
@@ -237,15 +224,15 @@ function onMessage(evt)
       window.devToolsExtension ? window.devToolsExtension() : f => f
     )(createStore);
 
-    store = finalCreateStore(eventsApp)//, evt.data.value.contents)
+    store = finalCreateStore(eventsReducers)//, evt.data.value.contents)
 
     for (let e of reversed) {
-        dispatchEvent(e[0]);
+      dispatchEvent(e[0]);
     }
 
     render(
       <Provider store={store}>
-        <App />
+      <App />
       </Provider>,
       document.getElementById('react')
     )

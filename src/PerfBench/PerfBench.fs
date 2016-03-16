@@ -45,7 +45,7 @@ let private events = ref List.empty
 
 let private spawnWeb parent = 
     spawn parent "webServer" <| fun mailbox -> 
-        let echo (webSocket : WebSocket) = 
+        let webServer (webSocket : WebSocket) = 
             let wsSender = 
                 MailboxProcessor.Start(fun inbox -> 
                     let rec messageLoop = 
@@ -55,8 +55,8 @@ let private spawnWeb parent =
                             let str = jsonSerializer.PickleToString(msg)
                             let data = Encoding.UTF8.GetBytes(str)
                             let! a = webSocket.send Text data true
-                            printf "x"
-                            return! messageLoop
+                            printf ">"
+                            return! messageLoop 
                         }
                     messageLoop)
             
@@ -94,7 +94,7 @@ let private spawnWeb parent =
         let bundle = srBundle.ReadToEnd()
         
         let app : WebPart = 
-            choose [ path "/websocket" >=> handShake echo
+            choose [ path "/websocket" >=> handShake webServer
                      //GET >=> choose [ path "/" >=> file "index.html"; browseHome ];
                      GET >=> choose [ path "/" >=> OK index
                                       path "/bundle.js" >=> OK bundle ]
@@ -158,6 +158,7 @@ let private createSwarm swarmName swarmSize func parent =
                                               (name, ref, Succeeded(message, time))
                                           | name, ref, state -> name, ref, state))
                         | Failure(droneName, message, time) -> 
+                            //printfn "failed %s %s" droneName message
                             (state |> List.map (fun elem -> 
                                           match elem with
                                           | name, ref, Executing when name = droneName -> 
@@ -165,7 +166,7 @@ let private createSwarm swarmName swarmSize func parent =
                                               (name, ref, Failed(message, time))
                                           | name, ref, state -> name, ref, state))
                     
-                    let leftToProcess = 
+                    let unfinished = 
                         newState
                         |> List.filter (fun e -> 
                                let n, r, s = e
@@ -173,9 +174,9 @@ let private createSwarm swarmName swarmSize func parent =
                         |> List.length
                     
                     match result with
-                    | Success(name, message, time) -> mailbox.Context.Parent <! DroneReply(FinishedEvent(name, time))
-                    | Failure(name, message, time) -> mailbox.Context.Parent <! DroneReply(FailedEvent(name, time))
-                    do if (leftToProcess = 0) then mailbox.Self <! Stats
+                    | Success(name, message, time) -> mailbox.Context.Parent <! DroneReply(FinishedEvent(name, message, time))
+                    | Failure(name, message, time) -> mailbox.Context.Parent <! DroneReply(FailedEvent(name, message, time))
+                    do if (unfinished = 0) then mailbox.Self <! Stats
                     return! loop newState
                 | Stats -> 
                     timer.Stop()

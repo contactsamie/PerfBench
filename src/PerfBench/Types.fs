@@ -18,8 +18,8 @@ type TaskStatus =
 
 type Events = 
     | StartedEvent of string
-    | FinishedEvent of string * float
-    | FailedEvent of string * float
+    | FinishedEvent of string * string * float
+    | FailedEvent of string * string * float
 
 type Swarm = 
     { Name : string

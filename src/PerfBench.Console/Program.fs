@@ -8,6 +8,8 @@ open System.Threading.Tasks
 
 [<EntryPoint>]
 let main argv = 
+    let rnd = System.Random()
+
     let db = 
         if argv.Length > 0 then argv.[0]
         else ""
@@ -16,12 +18,10 @@ let main argv =
         if argv.Length > 1 then (int argv.[1])
         else 0
     
-    let getRandomNumberAsString max = 
-        let rnd = System.Random()
+    let getRandomNumberAsString max =         
         string (rnd.Next(max))
     
     let getRandomNumber max = 
-        let rnd = System.Random()
         rnd.Next(max)
     
     let GetUserByPost post = 
@@ -55,6 +55,7 @@ let main argv =
         }
     
     System.Threading.ThreadPool.SetMaxThreads(600, 1000) |> ignore
-    do newSwarm "test" 1000 doStuffThatFails
+    do newSwarm "test" 100 doStuff
+
     System.Console.ReadLine() |> ignore
     0
