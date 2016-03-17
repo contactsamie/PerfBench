@@ -4,11 +4,13 @@ import thunk from 'redux-thunk'
 import React, {PropTypes} from 'react'
 import {connect, Provider} from 'react-redux'
 import {render} from 'react-dom'
-import PureRenderMixin from 'react-addons-pure-render-mixin';
+import PureRenderMixin from 'react-addons-pure-render-mixin'
+import {Map} from 'immutable'
 
 let websocket
 let wsUri = "ws://localhost:8083/websocket"
 let output
+const initialState = Map({})
 
 const event = (e, action) => {
     switch (action.type) {
@@ -36,26 +38,14 @@ const event = (e, action) => {
     }
 }
 
-const events = (state = [], action) => {
-    //console.log("state: " + JSON.stringify(state))
+const events = (state = initialState, action) => {
     switch (action.type) {
         case 'StartedEvent':
-            if (state.find(e => e.id === action.id)) return state
-            return [
-                ...state,
-                event(undefined, action)
-            ]
+            if (state.get(action.id)) return state
+            return state.set(action.id, event(undefined, action))
         case 'FinishedEvent':
         case 'FailedEvent':
-            if (!state.find(e => e.id === action.id)) {
-                return [
-                    ...state,
-                    event(undefined, action)
-                ]
-            }
-            return state.map(e =>
-                event(e, action)
-            )
+            return state.set(action.id, event(undefined, action))
         default:
             return state
     }
@@ -150,11 +140,12 @@ const mapStateToProps = (state) => {
 }
 
 const mapStateToHeaderProps = (state) => {
-    let f = state.events.filter(e => e.type == "FinishedEvent")
+    let events = state.events
+    let f = events.filter(e => e.type == "FinishedEvent")
     let finished = f.map(e => parseFloat(e.text))
     return {
-        average: finished.reduce((a, b)=>a + b, 0) / finished.length,
-        max: Math.max.apply(Math, finished)
+        average: finished.reduce((a, b)=>a + b, 0) / finished.count(),
+        max: finished.reduce((a, b)=>Math.max(a, b), 0)
     }
 }
 
@@ -192,14 +183,14 @@ function dispatchEvent(event) {
             store.dispatch(failedEvent(getNumericId(event.Item1), parseFloat(event.Item3)))
             break;
         default:
-            //console.log("Unknown event")
+            console.log("Unknown event")
             break;
     }
 }
 
 const finalCreateStore = compose(
     applyMiddleware(thunk),
-    //window.devToolsExtension ? window.devToolsExtension() : f => f
+    window.devToolsExtension ? window.devToolsExtension() : f => f
 )(createStore);
 
 let store = finalCreateStore(eventsReducers)
@@ -223,7 +214,6 @@ function testWebSocket() {
     websocket.onerror = onError
 }
 function onOpen(evt) {
-    //console.log(evt)
     writeToScreen("CONNECTED");
     doSend("INIT");
 }
@@ -234,7 +224,6 @@ function onClose(evt) {
 function onMessage(evt) {
     let data = JSON.parse(evt.data)
     if (data.value.contents) {
-        //let reversed = data.value.contents.reverse();
         data.value.contents.forEach(e => dispatchEvent(e[0]))
     } else {
         dispatchEvent(data.value)
