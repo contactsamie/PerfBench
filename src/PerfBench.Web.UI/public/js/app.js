@@ -24,13 +24,19 @@ const event = (e, action) => {
         case 'FailedEvent':
             if (!e) {
                 return {
-                    id: action.id,
-                    text: action.text,
-                    type: action.type
+                    id: action.id
+                    , text: action.text
+                    , type: action.type
+                    , duration: action.duration
                 }
             }
             if (e.id === action.id) {
-                return {...e, type: action.type, text: action.text}
+                return {
+                    ...e
+                    , type: action.type
+                    , text: action.text
+                    , duration: action.duration
+                }
             }
             return e;
         default:
@@ -55,27 +61,29 @@ const eventsReducers = combineReducers({
     events
 })
 
-function startedEvent(_id, text) {
+function startedEvent(id, text) {
     return {
         type: 'StartedEvent',
-        id: _id,
+        id,
         text
     }
 }
 
-function finishedEvent(_id, text) {
+function finishedEvent(id, text, duration) {
     return {
         type: 'FinishedEvent',
-        id: _id,
-        text
+        id,
+        text,
+        duration
     }
 }
 
-function failedEvent(_id, text) {
+function failedEvent(id, text, duration) {
     return {
         type: 'FailedEvent',
-        id: _id,
-        text
+        id,
+        text,
+        duration
     }
 }
 
@@ -87,18 +95,20 @@ class StreamingEvent extends React.Component {
 
     render() {
         //console.log("Rendering - " + JSON.stringify(this.props))
-        let {type, text} = this.props
+        let {type, text, duration} = this.props
+        let t = "[" + duration.toFixed(2) + "] " + text
         return (
-            <li className={"flex-item " + type} title={text}>
+            <li className={"flex-item " + type}
+                title={t}>
             </li>
         )
     }
 }
 
-StreamingEvent.propTypes = {
-    type: PropTypes.string.isRequired,
-    text: PropTypes.number.isRequired
-}
+// StreamingEvent.propTypes = {
+//     type: PropTypes.string.isRequired,
+//     text: PropTypes.string.isRequired
+// }
 
 const StreamingEventList = ({events}) =>
     (
@@ -115,15 +125,15 @@ const StreamingEventList = ({events}) =>
 // StreamingEventList.propTypes = {
 //   events: PropTypes.arrayOf(PropTypes.shape({
 //     id: PropTypes.number.isRequired,
-//     text: PropTypes.string.number,
-//     type: PropTypes.string.isRequired
+//     text: PropTypes.string.isRequired,
+//     type: PropTypes.string.isRequired,
 //   }).isRequired).isRequired,
 // }
 
 const Header = ({average, max}) => (
     <ul>
-        <li>Average: {average}</li>
-        <li>Maximum: {max}</li>
+        <li>Average: {average.toFixed(2)}</li>
+        <li>Maximum: {max.toFixed(2)}</li>
     </ul>
 )
 
@@ -142,7 +152,7 @@ const mapStateToProps = (state) => {
 const mapStateToHeaderProps = (state) => {
     let events = state.events
     let f = events.filter(e => e.type == "FinishedEvent")
-    let finished = f.map(e => parseFloat(e.text))
+    let finished = f.map(e => parseFloat(e.duration))
     return {
         average: finished.reduce((a, b)=>a + b, 0) / finished.count(),
         max: finished.reduce((a, b)=>Math.max(a, b), 0)
@@ -173,14 +183,14 @@ function dispatchEvent(event) {
     switch (event.Case) {
         case 'StartedEvent':
             //console.log("Started " + getNumericId(event.Item))
-            store.dispatch(startedEvent(getNumericId(event.Item), 0.0))
+            store.dispatch(startedEvent(getNumericId(event.Item), ""))
             break;
         case 'FinishedEvent':
             //console.log("Finished " + getNumericId(event.Item1))
-            store.dispatch(finishedEvent(getNumericId(event.Item1), parseFloat(event.Item3)))
+            store.dispatch(finishedEvent(getNumericId(event.Item1), event.Item2, parseFloat(event.Item3)))
             break;
         case 'FailedEvent':
-            store.dispatch(failedEvent(getNumericId(event.Item1), parseFloat(event.Item3)))
+            store.dispatch(failedEvent(getNumericId(event.Item1), event.Item2, parseFloat(event.Item3)))
             break;
         default:
             console.log("Unknown event")

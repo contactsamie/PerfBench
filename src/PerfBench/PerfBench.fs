@@ -55,11 +55,11 @@ let private spawnWeb parent =
                             let str = jsonSerializer.PickleToString(msg)
                             let data = Encoding.UTF8.GetBytes(str)
                             let! a = webSocket.send Text data true
-                            printf ">"
+                            //printf ">"
                             return! messageLoop 
                         }
                     messageLoop)
-            
+
             let notifyLoop = 
                 async { 
                     while true do
@@ -75,14 +75,17 @@ let private spawnWeb parent =
                     let loop = ref true
                     while !loop do
                         let! msg = webSocket.read()
-                        match msg with
+                        //printf "%A" msg
+                        match msg with                       
                         | (Text, data, true) -> 
-                            let jsonSerializer = FsPickler.CreateJsonSerializer(indent = true)
+                            let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false)
                             let str = Encoding.UTF8.GetBytes(jsonSerializer.PickleToString(events))
                             do! webSocket.send Text str true
+                            //()
                         | (Ping, _, _) -> do! webSocket.send Pong [||] true
                         | (Close, _, _) -> 
                             do! webSocket.send Close [||] true
+                            do cts.Cancel()
                             loop := false
                         | _ -> ()
                 }
