@@ -22,19 +22,11 @@ const event = (e, action) => {
             }
         case 'FinishedEvent':
         case 'FailedEvent':
-            if (!e) {
+            if (!e || e.id === action.id) {
                 return {
                     id: action.id
                     , text: action.text
                     , type: action.type
-                    , duration: action.duration
-                }
-            }
-            if (e.id === action.id) {
-                return {
-                    ...e
-                    , type: action.type
-                    , text: action.text
                     , duration: action.duration
                 }
             }
@@ -96,10 +88,10 @@ class StreamingEvent extends React.Component {
     render() {
         //console.log("Rendering - " + JSON.stringify(this.props))
         let {type, text, duration} = this.props
-        let t = "[" + duration.toFixed(2) + "] " + text
+        let d = duration ? "[" + duration.toFixed(2) + "s] " : ""
         return (
             <li className={"flex-item " + type}
-                title={t}>
+                title={d + text}>
             </li>
         )
     }
@@ -132,8 +124,8 @@ const StreamingEventList = ({events}) =>
 
 const Header = ({average, max}) => (
     <ul>
-        <li>Average: {average.toFixed(2)}</li>
-        <li>Maximum: {max.toFixed(2)}</li>
+        <li>Average time taken: {average.toFixed(2)}s</li>
+        <li>Maximum time taken: {max.toFixed(2)}s</li>
     </ul>
 )
 
@@ -151,6 +143,7 @@ const mapStateToProps = (state) => {
 
 const mapStateToHeaderProps = (state) => {
     let events = state.events
+    if (events.count() === 0) return {average: 0, max: 0}
     let f = events.filter(e => e.type == "FinishedEvent")
     let finished = f.map(e => parseFloat(e.duration))
     return {
@@ -243,7 +236,7 @@ function onError(evt) {
     writeToScreen('<span style="color: red;">ERROR:</span> ' + evt.data);
 }
 function doSend(message) {
-    writeToScreen("SENT: " + message);
+    //writeToScreen("SENT: " + message);
     websocket.send(message);
 }
 function writeToScreen(message) {
