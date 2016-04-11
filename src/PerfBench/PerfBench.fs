@@ -56,10 +56,10 @@ let private spawnWeb parent =
                             let data = Encoding.UTF8.GetBytes(str)
                             let! a = webSocket.send Text data true
                             //printf ">"
-                            return! messageLoop 
+                            return! messageLoop
                         }
                     messageLoop)
-
+            
             let notifyLoop = 
                 async { 
                     while true do
@@ -76,12 +76,12 @@ let private spawnWeb parent =
                     while !loop do
                         let! msg = webSocket.read()
                         //printf "%A" msg
-                        match msg with                       
+                        match msg with
                         | (Text, data, true) -> 
                             let jsonSerializer = FsPickler.CreateJsonSerializer(indent = false)
                             let str = Encoding.UTF8.GetBytes(jsonSerializer.PickleToString(events))
                             do! webSocket.send Text str true
-                            //()
+                        //()
                         | (Ping, _, _) -> do! webSocket.send Pong [||] true
                         | (Close, _, _) -> 
                             do! webSocket.send Close [||] true
@@ -107,28 +107,35 @@ let private spawnWeb parent =
                                  return! loop() }
         loop()
 
-let private spawnDrone name (brain:(unit -> Async<unit>) list) (parent : Actor<CoordinatorMessages>) = 
+let private spawnDrone name (brain : (unit -> Async<unit>) list) (parent : Actor<CoordinatorMessages>) = 
     spawn parent name <| fun droneMailbox -> 
         //printfn "starting drone %s" name
         let timer = new System.Diagnostics.Stopwatch()
         do droneMailbox.Defer(fun () -> 
                printfn "failed %s" name
-               parent.Self <! Finished(Failure(name, "Unknown Error", timer.Elapsed.TotalSeconds)))
+               droneMailbox.Context.Parent <! Finished(Failure(name, "Unknown Error", timer.Elapsed.TotalSeconds)))
         let rec loop() = 
             actor { 
                 let! msg = droneMailbox.Receive()
-                //printf "%A" msg
                 match msg with
-                | Execute x -> 
+                | Execute x when x < brain.Length -> 
                     async { 
                         timer.Start()
                         let! result = brain.[x]() |> Async.Catch
                         timer.Stop()
                         match result with
-                        | Choice1Of2 _ -> return Finished(Success(name, "", timer.Elapsed.TotalSeconds))
-                        | Choice2Of2 exn -> return Finished(Failure(name, exn.Message, timer.Elapsed.TotalSeconds))
+                        | Choice1Of2 _ -> return Execute(x + 1)
+                        | Choice2Of2 exn -> 
+                            return Fail(x, 
+                                        { Name = name
+                                          Message = exn.Message
+                                          Duration = timer.Elapsed.TotalSeconds })
                     }
-                    |!> parent.Self
+                    |!> droneMailbox.Self
+                | Execute x -> droneMailbox.Context.Parent <! Finished(Success(name, "", timer.Elapsed.TotalSeconds))
+                | Fail(s, { Name = n; Message = m; Duration = d }) -> 
+                    droneMailbox.Context.Parent <! Finished(Failure(n, m, d))
+                return! loop()
             }
         loop()
 
@@ -161,8 +168,8 @@ let private createSwarm swarmName swarmSize func parent =
                                               (name, ref, Succeeded(message, time))
                                           | name, ref, state -> name, ref, state))
                         | Failure(droneName, message, time) -> 
-                            //printfn "failed %s %s" droneName message
-                            (state |> List.map (fun elem -> 
+                            (//printfn "failed %s %s" droneName message
+                             state |> List.map (fun elem -> 
                                           match elem with
                                           | name, ref, Executing when name = droneName -> 
                                               printf "x"
@@ -177,8 +184,10 @@ let private createSwarm swarmName swarmSize func parent =
                         |> List.length
                     
                     match result with
-                    | Success(name, message, time) -> mailbox.Context.Parent <! DroneReply(FinishedEvent(name, message, time))
-                    | Failure(name, message, time) -> mailbox.Context.Parent <! DroneReply(FailedEvent(name, message, time))
+                    | Success(name, message, time) -> 
+                        mailbox.Context.Parent <! DroneReply(FinishedEvent(name, message, time))
+                    | Failure(name, message, time) -> 
+                        mailbox.Context.Parent <! DroneReply(FailedEvent(name, message, time))
                     do if (unfinished = 0) then mailbox.Self <! Stats
                     return! loop newState
                 | Stats -> 

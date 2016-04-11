@@ -41,20 +41,20 @@ let main argv =
     
     let doStuff() = 
         async { 
-            do! getRandomNumber 20000 |> Async.Sleep
+            do! getRandomNumber 2000 |> Async.Sleep
             ()
         }
     
     let doStuffThatFails() = 
         async { 
-            do! getRandomNumber 20000
+            do! getRandomNumber 2000
                 |> Task.Delay
                 |> Async.AwaitTask
             if (getRandomNumber (2) > 0) then failwith ("fail")
             ()
         }
     
-    do newSwarm "test" 100 [doStuff;doStuffThatFails]
+    do newSwarm "test" 10 [doStuff;doStuff;doStuffThatFails]
     do System.Diagnostics.Process.Start("http://localhost:8083") |> ignore
     System.Console.ReadLine() |> ignore
     0
