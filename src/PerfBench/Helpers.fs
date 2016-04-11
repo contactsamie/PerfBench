@@ -2,30 +2,25 @@
 
 open Types
 
+let failIfNeeded message e =
+                 match e with
+                 | _, _, Succeeded(_, t) -> t
+                 | _, _, Failed(_, t) -> t
+                 | _, _, Executing -> failwith message
+
 let getAverage list = 
     match list with
     | [] -> 0.0
     | l -> 
-        l |> List.averageBy (fun e -> 
-                 match e with
-                 | _, _, Succeeded(_, t) -> t
-                 | _, _, Failed(_, t) -> t
-                 | _, _, Executing -> failwith "Trying to average on Executing")
+        l |> List.averageBy (fun e -> failIfNeeded "Trying to average on Executing" e)
 
 let getMax list = 
     match list with
     | [] -> 0.0
     | l -> 
         let maxElement = 
-            l |> List.maxBy (fun e -> 
-                     match e with
-                     | _, _, Succeeded(_, t) -> t
-                     | _, _, Failed(_, t) -> t
-                     | _, _, Executing -> failwith "Trying to getMax on Executing")
-        match maxElement with
-        | _, _, Succeeded(_, t) -> t
-        | _, _, Failed(_, t) -> t
-        | _, _, Executing -> failwith "Trying to getMax on Executing"
+            l |> List.maxBy (fun e -> failIfNeeded "Trying to getMax on Executing" e)
+        failIfNeeded "Trying to getMax on Executing" maxElement
 
 let printStats state time = 
     let (successfulDrones, failedDrones) = 
