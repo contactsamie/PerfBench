@@ -119,10 +119,10 @@ let private spawnDrone name (brain:(unit -> Async<unit>) list) (parent : Actor<C
                 let! msg = droneMailbox.Receive()
                 //printf "%A" msg
                 match msg with
-                | Execute -> 
+                | Execute x -> 
                     async { 
                         timer.Start()
-                        let! result = brain.[0]() |> Async.Catch
+                        let! result = brain.[x]() |> Async.Catch
                         timer.Stop()
                         match result with
                         | Choice1Of2 _ -> return Finished(Success(name, "", timer.Elapsed.TotalSeconds))
@@ -146,7 +146,7 @@ let private createSwarm swarmName swarmSize func parent =
                     return! loop ([ 1..swarmSize ] |> List.map (fun i -> 
                                                           let name = swarmName + "-drone-" + (string i)
                                                           let ref = spawnDrone name func mailbox
-                                                          do ref <! Execute
+                                                          do ref <! Execute 0
                                                           printf "."
                                                           do mailbox.Context.Parent <! DroneReply(StartedEvent name)
                                                           name, ref, Executing))

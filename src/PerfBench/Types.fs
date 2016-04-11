@@ -1,6 +1,6 @@
 ﻿module PerfBench.Types
 
-type Messages = Execute
+type Messages = Execute of int
 
 type ExecutionResult = 
     | Success of string * string * float
