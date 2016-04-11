@@ -54,7 +54,7 @@ let main argv =
             ()
         }
     
-    do newSwarm "test" 100 doStuff
+    do newSwarm "test" 100 [doStuff;doStuffThatFails]
     do System.Diagnostics.Process.Start("http://localhost:8083") |> ignore
     System.Console.ReadLine() |> ignore
     0

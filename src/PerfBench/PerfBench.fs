@@ -107,7 +107,7 @@ let private spawnWeb parent =
                                  return! loop() }
         loop()
 
-let private spawnDrone name brain (parent : Actor<CoordinatorMessages>) = 
+let private spawnDrone name (brain:(unit -> Async<unit>) list) (parent : Actor<CoordinatorMessages>) = 
     spawn parent name <| fun droneMailbox -> 
         //printfn "starting drone %s" name
         let timer = new System.Diagnostics.Stopwatch()
@@ -122,7 +122,7 @@ let private spawnDrone name brain (parent : Actor<CoordinatorMessages>) =
                 | Execute -> 
                     async { 
                         timer.Start()
-                        let! result = brain() |> Async.Catch
+                        let! result = brain.[0]() |> Async.Catch
                         timer.Stop()
                         match result with
                         | Choice1Of2 _ -> return Finished(Success(name, "", timer.Elapsed.TotalSeconds))
@@ -211,7 +211,7 @@ let private hiveRef =
                                             | _ -> Directive.Stop)) ]
 
 // actual api
-let newSwarm swarmName swarmSize (func : unit -> Async<unit>) = 
+let newSwarm swarmName swarmSize (func : (unit -> Async<unit>) list) = 
     let x = 
         CreateSwarm { Name = swarmName
                       Size = swarmSize }
