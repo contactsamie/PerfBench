@@ -107,7 +107,7 @@ let private spawnWeb parent =
                                  return! loop() }
         loop()
 
-let private spawnDrone name (brain : (unit -> Async<unit>) list) (parent : Actor<CoordinatorMessages>) = 
+let private spawnDrone name (brain : ('a -> 'b) list) (parent : Actor<CoordinatorMessages>) = 
     spawn parent name <| fun droneMailbox -> 
         //printfn "starting drone %s" name
         let timer = new System.Diagnostics.Stopwatch()
@@ -118,21 +118,25 @@ let private spawnDrone name (brain : (unit -> Async<unit>) list) (parent : Actor
             actor { 
                 let! msg = droneMailbox.Receive()
                 match msg with
-                | Execute x when x < brain.Length -> 
+                | Execute(x, p) when x < brain.Length -> 
                     async { 
                         timer.Start()
-                        let! result = brain.[x]() |> Async.Catch
+                        let f = brain.[x]
+                        let! result = f() |> Async.Catch
                         timer.Stop()
                         match result with
-                        | Choice1Of2 _ -> return Execute(x + 1)
+                        | Choice1Of2 _ -> return Execute(x + 1, result)
                         | Choice2Of2 exn -> 
                             return Fail(x, 
                                         { Name = name
-                                          Message = exn.Message
+                                          Message = "Failed on step " + (string (x + 1)) + " with error: " + exn.Message
                                           Duration = timer.Elapsed.TotalSeconds })
                     }
                     |!> droneMailbox.Self
-                | Execute x -> droneMailbox.Context.Parent <! Finished(Success(name, "", timer.Elapsed.TotalSeconds))
+                | Execute(x, p) -> 
+                    let finished = string x
+                    droneMailbox.Context.Parent 
+                    <! Finished(Success(name, finished + " steps finished", timer.Elapsed.TotalSeconds))
                 | Fail(s, { Name = n; Message = m; Duration = d }) -> 
                     droneMailbox.Context.Parent <! Finished(Failure(n, m, d))
                 return! loop()
@@ -153,7 +157,7 @@ let private createSwarm swarmName swarmSize func parent =
                     return! loop ([ 1..swarmSize ] |> List.map (fun i -> 
                                                           let name = swarmName + "-drone-" + (string i)
                                                           let ref = spawnDrone name func mailbox
-                                                          do ref <! Execute 0
+                                                          do ref <! Execute(0, null)
                                                           printf "."
                                                           do mailbox.Context.Parent <! DroneReply(StartedEvent name)
                                                           name, ref, Executing))

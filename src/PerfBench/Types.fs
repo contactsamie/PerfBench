@@ -6,7 +6,7 @@ type Failure =
       Duration : float }
 
 type Messages = 
-    | Execute of int
+    | Execute of int * obj
     | Fail of int * Failure
 
 type ExecutionResult = 
