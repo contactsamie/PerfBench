@@ -27,6 +27,12 @@ let private config = @"
         loglevel = DEBUG
         # this config section will be referenced as akka.actor
         actor { 
+            serializers {
+                wire = ""Akka.Serialization.WireSerializer, Akka.Serialization.Wire""
+            }
+            serialization-bindings {
+            ""System.Object"" = wire
+            }
           debug {
               receive = on
               autoreceive = on
@@ -36,12 +42,23 @@ let private config = @"
           }
         }
     }"
-let private config2 = @""
-let private system = System.create "HiveSystem" <| Configuration.parse (config2)
+let private config2 = @"
+    akka.actor {
+        serializers {
+            wire = ""Akka.Serialization.WireSerializer, Akka.Serialization.Wire""
+        }
+        serialization-bindings {
+            ""System.Object"" = wire
+        }
+    }"
+
 let private brains = ref Map.empty
 let private event = new Event<Events>()
 let private publishedEvent = event.Publish
 let private events = ref List.empty
+
+let private system = System.create "HiveSystem" <| Configuration.parse ("")
+//:Map<string,(Unit->Async<Unit>) list> ref
 
 let private spawnWeb parent = 
     spawn parent "webServer" <| fun mailbox -> 
