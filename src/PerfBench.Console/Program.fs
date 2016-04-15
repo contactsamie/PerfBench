@@ -1,9 +1,7 @@
 ﻿module Program
 
 open PerfBench.Engine
-open HttpClient
 open FSharp.Data
-open FSharp.Data.JsonExtensions
 open System.Threading.Tasks
 
 [<EntryPoint>]
@@ -20,22 +18,7 @@ let main argv =
     
     let getRandomNumberAsString max = string (rnd.Next(max))
     let getRandomNumber max = rnd.Next(max)
-    
-    let GetUserByPost post = 
-        async { 
-            let baseUrl = "https://httpbin.org/get"
-            printfn "response"
-            let! response = createRequest Get baseUrl |> getResponseAsync
-            printfn "got response"
-            match response.StatusCode with
-            | 200 -> 
-                let parsedResponse = JsonValue.Parse(response.EntityBody.Value)
-                let userId = parsedResponse?origin.AsString()
-                printfn "%s\r\n" userId
-            | _ -> printfn "Failed with code: %s" (string response.StatusCode)
-            ()
-        }
-    
+
     let doStuff() = 
         async { 
             do! getRandomNumber 2000 |> Async.Sleep

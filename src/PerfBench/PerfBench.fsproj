@@ -1,22 +1,20 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>b06bdbb5-6a35-42b0-97ce-c8b0d56cdb8b</ProjectGuid>
+    <ProjectGuid>{B06BDBB5-6A35-42B0-97CE-C8B0D56CDB8B}</ProjectGuid>
     <OutputType>Library</OutputType>
     <RootNamespace>PerfBench</RootNamespace>
     <AssemblyName>PerfBench</AssemblyName>
-    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <TargetFSharpCoreVersion>4.4.0.0</TargetFSharpCoreVersion>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Name>PerfBench</Name>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <Tailcalls>false</Tailcalls>
     <OutputPath>bin\Debug\</OutputPath>
@@ -32,6 +30,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
     <DocumentationFile>bin\Release\PerfBench.XML</DocumentationFile>
+    <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
@@ -63,57 +62,46 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Akka">
-      <HintPath>..\packages\Akka.1.0.6\lib\net45\Akka.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="Akka.FSharp">
-      <HintPath>..\packages\Akka.FSharp.1.0.6\lib\net45\Akka.FSharp.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="FSharp.Core">
       <HintPath>..\packages\FSharp.Core.4.0.0.1\lib\net40\FSharp.Core.dll</HintPath>
-      <Private>True</Private>
     </Reference>
     <Reference Include="FSharp.Data">
       <HintPath>..\packages\FSharp.Data.2.3.0-beta2\lib\net40\FSharp.Data.dll</HintPath>
-      <Private>True</Private>
     </Reference>
     <Reference Include="FSharp.PowerPack">
       <HintPath>..\packages\FSPowerPack.Core.Community.3.0.0.0\lib\Net40\FSharp.PowerPack.dll</HintPath>
-      <Private>True</Private>
     </Reference>
     <Reference Include="FSharp.PowerPack.Linq">
       <HintPath>..\packages\FSPowerPack.Linq.Community.3.0.0.0\lib\Net40\FSharp.PowerPack.Linq.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="FsPickler">
-      <HintPath>..\packages\FsPickler.1.8.0\lib\net45\FsPickler.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="FsPickler.Json">
-      <HintPath>..\packages\FsPickler.Json.1.8.0\lib\net45\FsPickler.Json.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="HttpClient">
-      <HintPath>..\packages\Http.fs.1.5.1\lib\net40\HttpClient.dll</HintPath>
-      <Private>True</Private>
     </Reference>
     <Reference Include="mscorlib" />
-    <Reference Include="Newtonsoft.Json">
-      <HintPath>..\packages\Newtonsoft.Json.8.0.2\lib\net45\Newtonsoft.Json.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="Suave">
-      <HintPath>..\packages\Suave.1.1.1\lib\net40\Suave.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Numerics" />
     <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Xml.Linq" />
+    <Reference Include="Suave">
+      <HintPath>..\packages\Suave.1.1.2\lib\net40\Suave.dll</HintPath>
+    </Reference>
+    <Reference Include="FsPickler">
+      <HintPath>..\packages\FsPickler.2.1.0\lib\net45\FsPickler.dll</HintPath>
+    </Reference>
+    <Reference Include="FsPickler.Json">
+      <HintPath>..\packages\FsPickler.Json.2.1.0\lib\net45\FsPickler.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\packages\Newtonsoft.Json.8.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Collections.Immutable">
+      <HintPath>..\packages\System.Collections.Immutable.1.1.37\lib\portable-net45+win8+wp8+wpa81\System.Collections.Immutable.dll</HintPath>
+    </Reference>
+    <Reference Include="Akka">
+      <HintPath>..\packages\Akka.1.0.7\lib\net45\Akka.dll</HintPath>
+    </Reference>
+    <Reference Include="Akka.FSharp">
+      <HintPath>..\packages\Akka.FSharp.1.0.7\lib\net45\Akka.FSharp.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
