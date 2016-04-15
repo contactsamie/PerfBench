@@ -1,7 +1,6 @@
 ﻿module Program
 
 open PerfBench.Engine
-open FSharp.Data
 open System.Threading.Tasks
 
 [<EntryPoint>]
